@@ -1,7 +1,7 @@
 terraform {
   backend "azurerm" {
     resource_group_name  = "terraform-state-rg"
-    storage_account_name = "tfstateXXXXXXXXX"  # Replace with your $STATE_STORAGE value
+    storage_account_name = "tfstate767361244"  # Replace with your $STATE_STORAGE value
     container_name       = "tfstate"
     key                  = "terraform.tfstate"
   }
