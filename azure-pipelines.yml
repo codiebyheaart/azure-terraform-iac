@@ -12,7 +12,7 @@ variables:
   - name: backendAzureRmResourceGroupName
     value: 'terraform-state-rg'
   - name: backendAzureRmStorageAccountName
-    value: 'tfstateXXXXXXXXX'  # Replace with your storage account name
+    value: 'tfstate767361244'  # Replace with your storage account name
   - name: backendAzureRmContainerName
     value: 'tfstate'
   - name: backendAzureRmKey
