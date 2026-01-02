@@ -12,11 +12,13 @@ variables:
   - name: backendAzureRmResourceGroupName
     value: 'terraform-state-rg'
   - name: backendAzureRmStorageAccountName
-    value: 'tfstate767361244'  # Replace with your storage account name
+    value: 'tfstate767361244'
   - name: backendAzureRmContainerName
     value: 'tfstate'
   - name: backendAzureRmKey
     value: 'terraform.tfstate'
+  - name: TF_VERSION
+    value: '1.6.6'
 
 stages:
   - stage: Validate
@@ -25,27 +27,36 @@ stages:
       - job: ValidateTerraform
         displayName: 'Validate Terraform Configuration'
         steps:
-          - task: TerraformInstaller@1
-            displayName: 'Install Terraform'
+          - task: AzureCLI@2
+            displayName: 'Install Terraform & Validate'
             inputs:
-              terraformVersion: 'latest'
-
-          - task: TerraformTaskV4@4
-            displayName: 'Terraform Init'
-            inputs:
-              provider: 'azurerm'
-              command: 'init'
-              backendServiceArm: $(backendServiceArm)
-              backendAzureRmResourceGroupName: $(backendAzureRmResourceGroupName)
-              backendAzureRmStorageAccountName: $(backendAzureRmStorageAccountName)
-              backendAzureRmContainerName: $(backendAzureRmContainerName)
-              backendAzureRmKey: $(backendAzureRmKey)
-
-          - task: TerraformTaskV4@4
-            displayName: 'Terraform Validate'
-            inputs:
-              provider: 'azurerm'
-              command: 'validate'
+              azureSubscription: $(backendServiceArm)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Install Terraform
+                wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+                unzip -q terraform_$(TF_VERSION)_linux_amd64.zip
+                sudo mv terraform /usr/local/bin/
+                terraform version
+                
+                # Get storage account key
+                export ARM_ACCESS_KEY=$(az storage account keys list \
+                  --resource-group $(backendAzureRmResourceGroupName) \
+                  --account-name $(backendAzureRmStorageAccountName) \
+                  --query '[0].value' -o tsv)
+                
+                # Initialize Terraform
+                terraform init \
+                  -backend-config="resource_group_name=$(backendAzureRmResourceGroupName)" \
+                  -backend-config="storage_account_name=$(backendAzureRmStorageAccountName)" \
+                  -backend-config="container_name=$(backendAzureRmContainerName)" \
+                  -backend-config="key=$(backendAzureRmKey)"
+                
+                # Validate
+                terraform validate
+                
+                echo "✅ Terraform configuration is valid!"
 
   - stage: Plan
     displayName: 'Terraform Plan'
@@ -54,30 +65,36 @@ stages:
       - job: PlanInfrastructure
         displayName: 'Plan Infrastructure Changes'
         steps:
-          - task: TerraformInstaller@1
-            displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: 'latest'
-
-          - task: TerraformTaskV4@4
-            displayName: 'Terraform Init'
-            inputs:
-              provider: 'azurerm'
-              command: 'init'
-              backendServiceArm: $(backendServiceArm)
-              backendAzureRmResourceGroupName: $(backendAzureRmResourceGroupName)
-              backendAzureRmStorageAccountName: $(backendAzureRmStorageAccountName)
-              backendAzureRmContainerName: $(backendAzureRmContainerName)
-              backendAzureRmKey: $(backendAzureRmKey)
-
-          - task: TerraformTaskV4@4
+          - task: AzureCLI@2
             displayName: 'Terraform Plan'
             inputs:
-              provider: 'azurerm'
-              command: 'plan'
-              environmentServiceNameAzureRM: $(backendServiceArm)
-              commandOptions: '-out=tfplan'
-
+              azureSubscription: $(backendServiceArm)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Install Terraform
+                wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+                unzip -q terraform_$(TF_VERSION)_linux_amd64.zip
+                sudo mv terraform /usr/local/bin/
+                
+                # Get storage account key
+                export ARM_ACCESS_KEY=$(az storage account keys list \
+                  --resource-group $(backendAzureRmResourceGroupName) \
+                  --account-name $(backendAzureRmStorageAccountName) \
+                  --query '[0].value' -o tsv)
+                
+                # Initialize
+                terraform init \
+                  -backend-config="resource_group_name=$(backendAzureRmResourceGroupName)" \
+                  -backend-config="storage_account_name=$(backendAzureRmStorageAccountName)" \
+                  -backend-config="container_name=$(backendAzureRmContainerName)" \
+                  -backend-config="key=$(backendAzureRmKey)"
+                
+                # Plan
+                terraform plan -out=tfplan
+                
+                echo "✅ Terraform plan completed!"
+          
           - task: PublishPipelineArtifact@1
             displayName: 'Publish Plan File'
             inputs:
@@ -99,29 +116,35 @@ stages:
               steps:
                 - checkout: self
 
-                - task: TerraformInstaller@1
-                  displayName: 'Install Terraform'
-                  inputs:
-                    terraformVersion: 'latest'
-
-                - task: TerraformTaskV4@4
-                  displayName: 'Terraform Init'
-                  inputs:
-                    provider: 'azurerm'
-                    command: 'init'
-                    backendServiceArm: $(backendServiceArm)
-                    backendAzureRmResourceGroupName: $(backendAzureRmResourceGroupName)
-                    backendAzureRmStorageAccountName: $(backendAzureRmStorageAccountName)
-                    backendAzureRmContainerName: $(backendAzureRmContainerName)
-                    backendAzureRmKey: $(backendAzureRmKey)
-
-                - task: TerraformTaskV4@4
+                - task: AzureCLI@2
                   displayName: 'Terraform Apply'
                   inputs:
-                    provider: 'azurerm'
-                    command: 'apply'
-                    environmentServiceNameAzureRM: $(backendServiceArm)
-                    commandOptions: '-auto-approve'
+                    azureSubscription: $(backendServiceArm)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      # Install Terraform
+                      wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+                      unzip -q terraform_$(TF_VERSION)_linux_amd64.zip
+                      sudo mv terraform /usr/local/bin/
+                      
+                      # Get storage account key
+                      export ARM_ACCESS_KEY=$(az storage account keys list \
+                        --resource-group $(backendAzureRmResourceGroupName) \
+                        --account-name $(backendAzureRmStorageAccountName) \
+                        --query '[0].value' -o tsv)
+                      
+                      # Initialize
+                      terraform init \
+                        -backend-config="resource_group_name=$(backendAzureRmResourceGroupName)" \
+                        -backend-config="storage_account_name=$(backendAzureRmStorageAccountName)" \
+                        -backend-config="container_name=$(backendAzureRmContainerName)" \
+                        -backend-config="key=$(backendAzureRmKey)"
+                      
+                      # Apply
+                      terraform apply -auto-approve
+                      
+                      echo "✅ Infrastructure deployed successfully!"
 
   - stage: Outputs
     displayName: 'Show Outputs'
@@ -131,25 +154,34 @@ stages:
       - job: ShowOutputs
         displayName: 'Display Terraform Outputs'
         steps:
-          - task: TerraformInstaller@1
-            displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: 'latest'
-
-          - task: TerraformTaskV4@4
-            displayName: 'Terraform Init'
-            inputs:
-              provider: 'azurerm'
-              command: 'init'
-              backendServiceArm: $(backendServiceArm)
-              backendAzureRmResourceGroupName: $(backendAzureRmResourceGroupName)
-              backendAzureRmStorageAccountName: $(backendAzureRmStorageAccountName)
-              backendAzureRmContainerName: $(backendAzureRmContainerName)
-              backendAzureRmKey: $(backendAzureRmKey)
-
-          - task: TerraformTaskV4@4
+          - task: AzureCLI@2
             displayName: 'Terraform Output'
             inputs:
-              provider: 'azurerm'
-              command: 'output'
-              environmentServiceNameAzureRM: $(backendServiceArm)
+              azureSubscription: $(backendServiceArm)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Install Terraform
+                wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+                unzip -q terraform_$(TF_VERSION)_linux_amd64.zip
+                sudo mv terraform /usr/local/bin/
+                
+                # Get storage account key
+                export ARM_ACCESS_KEY=$(az storage account keys list \
+                  --resource-group $(backendAzureRmResourceGroupName) \
+                  --account-name $(backendAzureRmStorageAccountName) \
+                  --query '[0].value' -o tsv)
+                
+                # Initialize
+                terraform init \
+                  -backend-config="resource_group_name=$(backendAzureRmResourceGroupName)" \
+                  -backend-config="storage_account_name=$(backendAzureRmStorageAccountName)" \
+                  -backend-config="container_name=$(backendAzureRmContainerName)" \
+                  -backend-config="key=$(backendAzureRmKey)"
+                
+                # Show outputs
+                echo "========================================="
+                echo "         TERRAFORM OUTPUTS"
+                echo "========================================="
+                terraform output
+                echo "========================================="
