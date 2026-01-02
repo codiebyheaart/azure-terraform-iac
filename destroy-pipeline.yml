@@ -1,0 +1,53 @@
+trigger: none  # Manual trigger only
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - name: backendServiceArm
+    value: 'Azure-Terraform-Connection'
+  - name: backendAzureRmResourceGroupName
+    value: 'terraform-state-rg'
+  - name: backendAzureRmStorageAccountName
+    value: 'tfstateXXXXXXXXX'  # Replace with your storage account name
+  - name: backendAzureRmContainerName
+    value: 'tfstate'
+  - name: backendAzureRmKey
+    value: 'terraform.tfstate'
+
+stages:
+  - stage: Destroy
+    displayName: 'Destroy Infrastructure'
+    jobs:
+      - deployment: DestroyInfrastructure
+        displayName: 'Destroy All Resources'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: TerraformInstaller@1
+                  displayName: 'Install Terraform'
+                  inputs:
+                    terraformVersion: 'latest'
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Init'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'init'
+                    backendServiceArm: $(backendServiceArm)
+                    backendAzureRmResourceGroupName: $(backendAzureRmResourceGroupName)
+                    backendAzureRmStorageAccountName: $(backendAzureRmStorageAccountName)
+                    backendAzureRmContainerName: $(backendAzureRmContainerName)
+                    backendAzureRmKey: $(backendAzureRmKey)
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Destroy'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'destroy'
+                    environmentServiceNameAzureRM: $(backendServiceArm)
+                    commandOptions: '-auto-approve'
